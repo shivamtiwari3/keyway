@@ -187,6 +187,9 @@ function win32() {
     NODE: 'node.exe',
 
     copyRuntime(support) {
+      // When re-run from the installed copy (tray → Open Setup), RES is SUPPORT and
+      // node.exe is the running process: nothing to copy.
+      if (path.resolve(RES).toLowerCase() === path.resolve(support).toLowerCase()) return;
       for (const f of ['gateway.mjs', 'setup.mjs', 'node.exe']) fs.copyFileSync(path.join(RES, f), path.join(support, f));
       // Install the tray app too, so the login item has a stable path even if the download folder is cleaned.
       if (fs.existsSync(APP_EXE) && path.resolve(APP_EXE) !== path.resolve(SUP_EXE)) fs.copyFileSync(APP_EXE, SUP_EXE);
@@ -251,7 +254,8 @@ if (Test-Path $legacy) { Start-Process $legacy }
       rm(support);
       // If we were launched from the installed Keyway.exe it is still locked; delete it once it exits.
       if (fs.existsSync(support)) {
-        spawn('cmd.exe', ['/c', `ping -n 4 127.0.0.1 >nul & rmdir /s /q "${support}"`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        // windowsVerbatimArguments: cmd.exe doesn't understand Node's \" escaping.
+        spawn('cmd.exe', ['/d', '/c', `ping -n 4 127.0.0.1 >nul & rmdir /s /q "${support}"`], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
       }
     },
   };
