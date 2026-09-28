@@ -16,5 +16,7 @@ jobs:
           node --check setup.mjs
       - name: Lint Info.plist
         run: plutil -lint app/Info.plist
+      - name: Test gateway
+        run: node --test test/gateway.test.mjs
       - name: Build app
         run: ./make-dist.sh

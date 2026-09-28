@@ -2,10 +2,13 @@ SHELL := /bin/bash
 DIST := dist
 APP  := $(DIST)/Keyway.app
 
-.PHONY: build install uninstall run clean
+.PHONY: build install uninstall run test clean
 
 build:
 	./make-dist.sh
+
+test:
+	node --test test/gateway.test.mjs
 
 install: build
 	node "$(APP)/Contents/Resources/setup.mjs" install \
