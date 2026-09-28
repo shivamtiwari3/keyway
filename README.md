@@ -202,7 +202,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | Menu bar shows `Off` | Gateway isn't running — check `~/Library/Application Support/Keyway/gateway.log`, then reopen Keyway and reinstall. |
 | `401` from provider | Wrong or missing API key. |
 | Models missing in picker | Claude Desktop removes routes that aren't Anthropic-named; Keyway names them `claude-*` automatically. |
-| Gateway won't start | Port `8788` in use — change `port` in `config.json` and the profile URL. |
+| Gateway won't start | Another program owns the port. Install picks the first free port from `8788` automatically; set `PORT` to pin one. |
 | Gatekeeper blocks the app | Right-click → Open, or sign/notarize with your own Developer ID. |
 | Windows: tray icon grey / `Not running` | Check `%LOCALAPPDATA%\Keyway\gateway.log` (tray → Open Log), then tray → Restart Gateway. If the tray icon is gone, run `%LOCALAPPDATA%\Keyway\Keyway.exe --background`. |
 | Windows: SmartScreen blocks the app | More info → Run anyway, or sign `Keyway.exe` (`SIGNTOOL_CERT`). |

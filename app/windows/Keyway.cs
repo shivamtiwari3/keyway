@@ -346,6 +346,8 @@ namespace Keyway
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8, // node writes UTF-8, not the ANSI code page
+                    StandardErrorEncoding = Encoding.UTF8,
                     WorkingDirectory = Paths.Support,
                 };
                 psi.EnvironmentVariables["KEYWAY_CONFIG"] = Paths.Config;

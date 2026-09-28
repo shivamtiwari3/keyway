@@ -2,6 +2,7 @@
 // Installs / removes the Keyway local gateway for Claude Desktop. No dependencies.
 // Supports macOS (launchd) and Windows (Keyway.exe tray supervisor + HKCU Run key).
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
@@ -11,7 +12,9 @@ const RES = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
 const IS_WIN = process.platform === 'win32';
 const PROFILE_ID = '7a57ad9d-8708-5e0e-9a63-2d50f6438c90';
-const PORT = Number(process.env.PORT || 8788);
+// PORT env pins the port; otherwise install picks the first free one from 8788
+// (another local server may already own it).
+let PORT = Number(process.env.PORT || 8788);
 const arg = (name, def = '') => { const i = process.argv.indexOf('--' + name); return i >= 0 ? (process.argv[i + 1] ?? '') : def; };
 const flag = (name) => process.argv.includes('--' + name);
 
@@ -269,6 +272,25 @@ const LIB = path.join(P.ROOT3P, 'configLibrary');
 const META = path.join(LIB, '_meta.json');
 const SETTINGS = path.join(P.ROOT3P, 'claude_desktop_config.json');
 
+const portFree = (port) => new Promise((resolve) => {
+  const s = net.createServer();
+  s.once('error', () => resolve(false));
+  s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
+});
+
+async function choosePort() {
+  if (process.env.PORT) return;
+  await sleep(300); // let a just-stopped gateway release the port
+  for (let p = 8788; p < 8808; p++) {
+    if (await portFree(p)) {
+      if (p !== 8788) console.log(`port 8788 is in use by another program; using ${p}`);
+      PORT = p;
+      return;
+    }
+  }
+  throw new Error('no free port in 8788-8807; set PORT to choose one');
+}
+
 async function waitHealth(ms = 10000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
@@ -312,6 +334,7 @@ async function install(key) {
   fs.mkdirSync(SUPPORT, { recursive: true });
   P.stopGateway(); // release files held by a running gateway before overwriting them
   P.copyRuntime(SUPPORT);
+  await choosePort();
   const keyPath = path.join(SUPPORT, 'key');
   fs.writeFileSync(keyPath, key.trim() + '\n', { mode: 0o600 });
   P.protectKey(keyPath);
