@@ -33,6 +33,10 @@ const openai = await listen(async (req, res) => {
   openaiSeen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : null });
   if (req.url === '/v1/messages') { res.writeHead(404); return res.end(); } // not Anthropic
   if (req.url === '/models') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"data":[]}'); }
+  if (req.url === '/chat/completions' && body.includes('"model":"retired-model"')) {
+    res.writeHead(404, { 'content-type': 'application/json' });
+    return res.end('{"error":{"message":"The model `retired-model` does not exist","code":"model_not_found"}}');
+  }
   if (req.url !== '/chat/completions') { res.writeHead(404); return res.end(); }
   const j = JSON.parse(body);
   const wantsTool = Array.isArray(j.tools) && j.tools.length;
@@ -140,6 +144,14 @@ try {
     assert.equal(sent.body.model, 'gpt-test');
     assert.equal(sent.auth, `Bearer ${KEY}`);
     assert.deepEqual(sent.body.messages[0], { role: 'system', content: 'be brief' });
+  });
+
+  await test('provider 404 surfaces as 400 with the provider message', async () => {
+    const r = await post(oa, { model: 'keyway/' + Buffer.from('retired-model').toString('hex'), max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] });
+    assert.equal(r.status, 400);
+    const j = await r.json();
+    assert.equal(j.error.type, 'invalid_request_error');
+    assert.match(j.error.message, /HTTP 404: The model `retired-model` does not exist/);
   });
 
   await test('non-streaming tool call', async () => {

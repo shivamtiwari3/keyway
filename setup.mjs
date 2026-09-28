@@ -306,7 +306,12 @@ async function ensureGatewayBeforeRestart() {
 async function waitHealth(ms = 10000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
-    try { const r = await fetch(`http://127.0.0.1:${PORT}/health`); if (r.ok) return true; } catch {}
+    try {
+      // Must be *our* gateway, not whatever else happens to answer on the port.
+      const r = await fetch(`http://127.0.0.1:${PORT}/health`);
+      const j = r.ok ? await r.json() : null;
+      if (j && j.ok === true && 'upstream' in j && 'api' in j) return true;
+    } catch {}
     await sleep(300);
   }
   return false;
@@ -376,6 +381,9 @@ function uninstall() {
   }
   const s = readJson(SETTINGS, {});
   if (s.deploymentMode === '3p') { s.deploymentMode = '1p'; writeJson(SETTINGS, s); }
+  // Keep the last log for troubleshooting ("it didn't work, then I clicked Remove").
+  const lastLog = path.join(os.tmpdir(), 'keyway-gateway-last.log');
+  try { fs.copyFileSync(path.join(SUPPORT, 'gateway.log'), lastLog); console.log('gateway log kept at ' + lastLog); } catch {}
   P.removeSupport(SUPPORT);
   if (!NO_RESTART) P.restartClaude();
 }
