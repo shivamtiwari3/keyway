@@ -33,7 +33,7 @@ Claude Desktop ──▶  127.0.0.1:8788 (Keyway)  ──▶  your provider
   Desktop's profile and starts the gateway at login.
 - **Private by design** — binds `127.0.0.1` only; your key is stored locally
   (`chmod 600`) and sent only to the provider you chose. No telemetry.
-- **Small & auditable** — ~250 lines of dependency-free gateway. MIT licensed.
+- **Small & auditable** — a ~300-line dependency-free gateway. MIT licensed.
 
 ## Supported providers
 
@@ -49,7 +49,7 @@ Claude Desktop ──▶  127.0.0.1:8788 (Keyway)  ──▶  your provider
 
 ## Requirements
 
-- macOS 13 or later
+- macOS 13 or later (**Apple Silicon**) — the release app bundles an arm64 runtime
 - Claude Desktop installed
 - A model provider endpoint + API key
 
@@ -132,6 +132,8 @@ provider model via `modelMap`. The picker shows your friendly `label`.
 | `make-dist.sh` | Builds `dist/Keyway.app` and `Keyway-Setup.zip`. |
 
 ## Security & privacy
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 - Binds **loopback only** (`127.0.0.1`).
 - API key at `~/Library/Application Support/Keyway/key` (`chmod 600`); sent only

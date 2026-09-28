@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check JS
+        run: |
+          node --check gateway.mjs
+          node --check setup.mjs
+      - name: Lint Info.plist
+        run: plutil -lint app/Info.plist
+      - name: Build app
+        run: ./make-dist.sh

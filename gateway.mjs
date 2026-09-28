@@ -29,6 +29,9 @@ const AUTH_HEADER = cfg.authHeader || 'Authorization';
 const AUTH_SCHEME = cfg.authScheme === undefined ? 'Bearer ' : cfg.authScheme;
 const LOG = cfg.log !== false;
 const SAFE_PREFIX = 'keyway/';
+const STREAM_USAGE = cfg.streamUsage !== false;
+const REQUEST_TIMEOUT_MS = Number(cfg.timeoutMs || 600000);
+const PROBE_TIMEOUT_MS = Number(cfg.probeTimeoutMs || 8000);
 
 function loadKey() {
   if (process.env.PROVIDER_API_KEY) return process.env.PROVIDER_API_KEY.trim();
@@ -138,7 +141,7 @@ function anthropicToOpenAI(body) {
       else if (tc.type === 'tool' && tc.name) out.tool_choice = { type: 'function', function: { name: tc.name } };
     }
   }
-  if (out.stream) out.stream_options = { include_usage: true };
+  if (out.stream && STREAM_USAGE) out.stream_options = { include_usage: true };
   return out;
 }
 function mapStop(reason) {
@@ -235,18 +238,31 @@ function authHeaders() {
 let detectPromise = null;
 const modeResolved = () => API === 'anthropic' || API === 'openai';
 
+async function fetchTimeout(url, opts, ms) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ac.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+// A live Anthropic endpoint answers 200/400/413/422 to POST /v1/messages.
+// 401/403 mean "auth failed", not "endpoint speaking Anthropic" — so they must
+// NOT be treated as success (this was a false-positive that broke OpenAI hosts).
+const ANTHROPIC_ALIVE = new Set([200, 400, 413, 422]);
+
 async function detectMode(force = false) {
   if (modeResolved() && !force) return;
   const u = UPSTREAM.replace(/\/+$/, '');
   const headers = authHeaders();
+  const probeModel = DEFAULT_MODEL || 'claude-sonnet-4-5';
   for (const base of [u, u + '/anthropic']) {
     try {
-      const r = await fetch(base + '/v1/messages', {
+      const r = await fetchTimeout(base + '/v1/messages', {
         method: 'POST',
         headers: { ...headers, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: DEFAULT_MODEL, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
-      });
-      if (![404, 405, 501].includes(r.status)) {
+        body: JSON.stringify({ model: probeModel, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+      }, PROBE_TIMEOUT_MS);
+      if (ANTHROPIC_ALIVE.has(r.status)) {
         API = 'anthropic'; UPSTREAM = base;
         log(`detected api=anthropic @ ${base} (probe ${r.status})`);
         return;
@@ -255,7 +271,7 @@ async function detectMode(force = false) {
   }
   for (const base of [u, u + '/v1']) {
     try {
-      const r = await fetch(base + '/models', { headers });
+      const r = await fetchTimeout(base + '/models', { headers }, PROBE_TIMEOUT_MS);
       if (r.ok) {
         API = 'openai'; UPSTREAM = base;
         log(`detected api=openai @ ${base} (probe ${r.status})`);
@@ -277,9 +293,13 @@ async function forwardAnthropic(req, res, pathname, search, body) {
   for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k.toLowerCase())) headers[k] = v;
   Object.assign(headers, authHeaders());
   if (body.length) headers['content-length'] = Buffer.byteLength(body);
+  let streaming = false;
+  try { streaming = JSON.parse(body.toString('utf8')).stream === true; } catch {}
+  const opts = { method: req.method, headers, body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body };
   let upstream;
   try {
-    upstream = await fetch(UPSTREAM + pathname + search, { method: req.method, headers, body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body });
+    upstream = streaming ? await fetch(UPSTREAM + pathname + search, opts)
+                         : await fetchTimeout(UPSTREAM + pathname + search, opts, REQUEST_TIMEOUT_MS);
   } catch (e) { return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Upstream request failed: ' + e.message } }); }
   const out = {};
   for (const [k, v] of upstream.headers) if (!['content-encoding', 'transfer-encoding', 'content-length', 'connection'].includes(k.toLowerCase())) out[k] = v;
@@ -293,9 +313,26 @@ async function forwardOpenAI(req, res, body, requestedModel) {
   try { openaiBody = anthropicToOpenAI(JSON.parse(body.toString('utf8'))); }
   catch (e) { return sendJson(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'Bad request: ' + e.message } }); }
 
+  const url = `${UPSTREAM}/chat/completions`;
+  const call = (b) => {
+    const opts = { method: 'POST', headers: authHeaders(), body: JSON.stringify(b) };
+    return b.stream ? fetch(url, opts) : fetchTimeout(url, opts, REQUEST_TIMEOUT_MS);
+  };
   let upstream;
   try {
-    upstream = await fetch(`${UPSTREAM}/chat/completions`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(openaiBody) });
+    upstream = await call(openaiBody);
+    // Some providers reject stream_options; retry once without it.
+    if (!upstream.ok && upstream.status === 400 && openaiBody.stream_options) {
+      const t = await upstream.text().catch(() => '');
+      if (/stream_options|include_usage|unknown|unrecognized/i.test(t)) {
+        log('retrying without stream_options');
+        delete openaiBody.stream_options;
+        upstream = await call(openaiBody);
+      } else {
+        log('upstream 400', t.slice(0, 300));
+        return sendJson(res, 400, { type: 'error', error: { type: 'api_error', message: `Upstream 400: ${t.slice(0, 500)}` } });
+      }
+    }
   } catch (e) { return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Upstream request failed: ' + e.message } }); }
 
   if (!upstream.ok) {
@@ -352,9 +389,17 @@ const server = http.createServer(async (req, res) => {
   return sendJson(res, 404, { type: 'error', error: { type: 'not_found_error', message: `No route for ${req.method} ${p}` } });
 });
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') log(`port ${PORT} already in use — another gateway running?`);
+  else log('server error:', e.message);
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
   log(`listening on http://${HOST}:${PORT}  api=${API}`);
   log(`upstream ${UPSTREAM}`);
   log(`key ${KEY ? 'loaded' : 'MISSING'}`);
   log(`models ${MODELS.join(', ')}`);
+  if (!KEY) log('WARNING: no API key configured');
+  ensureMode().catch(() => {}); // resolve api mode so /health is accurate
 });

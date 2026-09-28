@@ -26,8 +26,6 @@ const UPSTREAM = (arg('upstream', 'https://api.openai.com/v1')).replace(/\/+$/, 
 const API_ARG = arg('api', 'auto'); // auto | anthropic | openai — the gateway resolves "auto"
 const MODEL_LIST = arg('models', 'gpt-4o-mini').split(',').map((s) => s.trim()).filter(Boolean);
 
-// Claude Desktop rejects model IDs containing '/' or '.', so advertise opaque,
-// reversible IDs instead. The gateway hex-decodes them back to the real model.
 // Claude Desktop only accepts gateway model routes that reference an Anthropic
 // model name (e.g. claude-sonnet-4-5), so advertise those and map each route to
 // the real provider model in the gateway.
@@ -41,6 +39,9 @@ const ROUTES = [
   { id: 'claude-3-haiku-20240307', tier: 'haiku' },
   { id: 'claude-sonnet-4-20250514', tier: 'sonnet' },
 ];
+if (MODEL_LIST.length > ROUTES.length) {
+  console.warn(`[setup] only the first ${ROUTES.length} models can be exposed; ignoring: ${MODEL_LIST.slice(ROUTES.length).join(', ')}`);
+}
 const MODELS = MODEL_LIST.slice(0, ROUTES.length).map((ref, i) => ({
   name: ROUTES[i].id,
   ref,
@@ -115,13 +116,18 @@ function writeProfile() {
 }
 
 async function install(key) {
+  if (!fs.existsSync(path.join(RES, 'node'))) {
+    throw new Error('bundled runtime not found — build first with `make build`, or use Keyway.app');
+  }
   fs.mkdirSync(SUPPORT, { recursive: true });
   fs.copyFileSync(path.join(RES, 'gateway.mjs'), path.join(SUPPORT, 'gateway.mjs'));
   fs.copyFileSync(path.join(RES, 'node'), path.join(SUPPORT, 'node'));
   fs.chmodSync(path.join(SUPPORT, 'node'), 0o755);
   sh('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', SUPPORT]);
   sh('/usr/bin/codesign', ['--force', '--sign', '-', path.join(SUPPORT, 'node')]);
-  fs.writeFileSync(path.join(SUPPORT, 'key'), key.trim() + '\n', { mode: 0o600 });
+  const keyPath = path.join(SUPPORT, 'key');
+  fs.writeFileSync(keyPath, key.trim() + '\n', { mode: 0o600 });
+  try { fs.chmodSync(keyPath, 0o600); } catch {}
   writeJson(path.join(SUPPORT, 'config.json'), {
     host: '127.0.0.1', port: PORT, api: API_ARG, providerName: PROVIDER_NAME, upstream: UPSTREAM,
     apiKeyFile: path.join(SUPPORT, 'key'),

@@ -67,11 +67,15 @@ final class Model: ObservableObject {
             p.standardOutput = pipe
             p.standardError = pipe
             var out = ""
+            let watchdog = DispatchWorkItem { if p.isRunning { p.terminate() } }
             do {
                 try p.run()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 240, execute: watchdog)
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 p.waitUntilExit()
+                watchdog.cancel()
                 out = String(data: data, encoding: .utf8) ?? ""
+                if p.terminationStatus != 0 && out.isEmpty { out = "error: exit code \(p.terminationStatus)" }
             } catch {
                 out = "error: \(error.localizedDescription)"
             }
@@ -107,8 +111,19 @@ final class Health: ObservableObject {
             Task { @MainActor in await self.poll() }
         }
     }
+    private var healthURL: URL {
+        let cfg = ("~/Library/Application Support/Keyway/config.json" as NSString).expandingTildeInPath
+        if let data = FileManager.default.contents(atPath: cfg),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let port = obj["port"] as? Int,
+           let url = URL(string: "http://127.0.0.1:\(port)/health") {
+            return url
+        }
+        return URL(string: "http://127.0.0.1:8788/health")!
+    }
+
     func poll() async {
-        guard let url = URL(string: "http://127.0.0.1:8788/health") else { return }
+        let url = healthURL
         var req = URLRequest(url: url)
         req.timeoutInterval = 2
         do {

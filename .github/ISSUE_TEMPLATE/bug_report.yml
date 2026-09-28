@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a problem with Keyway
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please fill this in.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "e.g. 14.5 (Apple Silicon)"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Anthropic
+        - OpenAI
+        - OpenRouter
+        - Groq
+        - DeepSeek
+        - Ollama (local)
+        - Custom / other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the exact error text and, if possible, the relevant lines from ~/Library/Application Support/Keyway/gateway.log
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: input
+    id: version
+    attributes:
+      label: Keyway version
+      placeholder: "e.g. v0.1.0"
