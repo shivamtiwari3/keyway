@@ -325,7 +325,9 @@ function sendUpstreamError(res, status, text) {
   if (typeof detail !== 'string') detail = JSON.stringify(detail);
   const type = status === 401 ? 'authentication_error' : status === 403 ? 'permission_error'
     : status === 429 ? 'rate_limit_error' : status >= 500 ? 'api_error' : 'invalid_request_error';
-  const out = status === 404 ? 400 : status;
+  // 413 likewise: Claude clients show "Request too large (max 32MB)" for any 413,
+  // but providers use it for token/rate limits (e.g. Groq's tokens-per-minute cap).
+  const out = status === 404 || status === 413 ? 400 : status;
   return sendJson(res, out, { type: 'error', error: { type, message: `${cfg.providerName || 'Provider'} returned HTTP ${status}: ${String(detail).slice(0, 500)}` } });
 }
 
