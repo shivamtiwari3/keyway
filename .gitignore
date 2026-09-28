@@ -1,0 +1,15 @@
+# build output
+dist/
+attic/
+
+# local state / backups
+*.bak*
+*.log
+config.json
+
+# macOS
+.DS_Store
+
+# node (bundled at build time, not committed)
+node
+node_modules/

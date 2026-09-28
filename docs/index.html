@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Keyway — use any model in Claude Desktop</title>
+<meta name="description" content="Keyway is a tiny local gateway that lets Claude Desktop use your own OpenAI, Anthropic, OpenRouter, Groq, DeepSeek or local Ollama models. Bring your own key. Free and open source." />
+<meta property="og:title" content="Keyway — use any model in Claude Desktop" />
+<meta property="og:description" content="Bring your own key. Point Claude Desktop at any OpenAI- or Anthropic-compatible provider." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%94%91%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#0f0f0f; --panel:#161616; --panel2:#1d1d1d; --line:#2a2a2a;
+    --fg:#ececec; --dim:#9a9a9a; --accent:#d97757; --accent2:#e8956f; --ok:#3fb950; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent2);text-decoration:none}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  header{position:sticky;top:0;background:rgba(15,15,15,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:10}
+  nav{display:flex;align-items:center;gap:22px;height:60px}
+  .brand{font-weight:700;font-size:18px;color:var(--fg);display:flex;align-items:center;gap:8px}
+  nav .links{display:flex;gap:20px;margin-left:auto}
+  nav .links a{color:var(--dim)} nav .links a:hover{color:var(--fg)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#1a0f0a}
+  .btn.primary:hover{background:var(--accent2)}
+  .hero{padding:84px 0 56px;text-align:center}
+  .hero h1{font-size:clamp(30px,5.4vw,54px);line-height:1.1;margin:0 0 16px;letter-spacing:-.02em}
+  .hero p.sub{font-size:clamp(16px,2.2vw,20px);color:var(--dim);max-width:680px;margin:0 auto 30px}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .small{font-size:13px;color:var(--dim);margin-top:14px}
+  .logos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:44px 0 8px}
+  .chip{border:1px solid var(--line);background:var(--panel);color:var(--dim);padding:7px 13px;border-radius:999px;font-size:14px}
+  section{padding:52px 0;border-top:1px solid var(--line)}
+  h2{font-size:26px;margin:0 0 8px;letter-spacing:-.01em}
+  .lead{color:var(--dim);margin:0 0 26px}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:800px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{margin:0 0 6px;font-size:16px}
+  .card p{margin:0;color:var(--dim);font-size:14.5px}
+  .step{display:flex;gap:14px}
+  .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#1a0f0a;font-weight:700;display:flex;align-items:center;justify-content:center}
+  code,pre{font-family:var(--mono);font-size:13px}
+  pre{background:#0b0b0b;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;color:#d8d8d8}
+  .faq details{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:10px;background:var(--panel)}
+  .faq summary{cursor:pointer;font-weight:600}
+  .faq p{color:var(--dim);margin:10px 0 0}
+  footer{padding:40px 0 60px;border-top:1px solid var(--line);color:var(--dim);text-align:center;font-size:14px}
+  .ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#">🔑 Keyway</a>
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#providers">Providers</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/shivamtiwari3/keyway">GitHub</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <h1>Use any model inside<br>Claude Desktop.</h1>
+    <p class="sub">Keyway is a tiny local gateway that points Claude Desktop at the provider you already pay for — OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, or a local Ollama. <strong>Bring your own key.</strong></p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/shivamtiwari3/keyway/releases/latest/download/Keyway-Setup.zip">⬇︎ Download for macOS</a>
+      <a class="btn" href="https://github.com/shivamtiwari3/keyway">View on GitHub</a>
+    </div>
+    <div class="small">macOS 13+ · free &amp; open source (MIT) · no account, no telemetry</div>
+    <div class="logos">
+      <span class="chip">Anthropic</span>
+      <span class="chip">OpenAI</span>
+      <span class="chip">OpenRouter</span>
+      <span class="chip">Groq</span>
+      <span class="chip">DeepSeek</span>
+      <span class="chip">Ollama (local)</span>
+      <span class="chip">…any OpenAI/Anthropic-compatible endpoint</span>
+    </div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="lead">A sidecar for Claude Desktop. No subscription, no middleman — your key goes only to the provider you choose.</p>
+      <div class="grid g3">
+        <div class="card step"><div class="num">1</div><div><h3>Download &amp; open</h3><p>Unzip and open Keyway. Paste your endpoint, API key, and model.</p></div></div>
+        <div class="card step"><div class="num">2</div><div><h3>Keyway connects</h3><p>It starts a loopback gateway, writes Claude Desktop's profile, and restarts it.</p></div></div>
+        <div class="card step"><div class="num">3</div><div><h3>Claude uses your models</h3><p>Pick a model in Claude Desktop. The menu bar shows <span class="ok">✓ Connected</span>.</p></div></div>
+      </div>
+      <pre>Claude Desktop ──▶  127.0.0.1:8788 (Keyway)  ──▶  your provider</pre>
+    </div>
+  </section>
+
+  <section id="providers">
+    <div class="wrap">
+      <h2>Works with what you already have</h2>
+      <p class="lead">Keyway auto-detects the endpoint's protocol — Anthropic pass-through, or OpenAI ↔ Anthropic translation (streaming and tool calls included).</p>
+      <div class="grid g2">
+        <div class="card"><h3>Anthropic-compatible</h3><p>Anthropic, DeepSeek (anthropic), or any <code>/v1/messages</code> endpoint. Used directly.</p></div>
+        <div class="card"><h3>OpenAI-compatible</h3><p>OpenAI, OpenRouter, Groq, Together, vLLM, llama.cpp, Ollama… translated automatically.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Features</h2>
+      <div class="grid g3">
+        <div class="card"><h3>Bring your own key</h3><p>Any OpenAI- or Anthropic-compatible endpoint. You keep the billing and the data path.</p></div>
+        <div class="card"><h3>Auto-detection</h3><p>You never choose a “mode”. Keyway probes your endpoint and adapts.</p></div>
+        <div class="card"><h3>Menu bar status</h3><p><span class="ok">✓ Connected</span> / ⚠ Off, plus quick access to setup and diagnostics.</p></div>
+        <div class="card"><h3>Private by design</h3><p>Binds <code>127.0.0.1</code> only. Key stored locally (chmod 600). No telemetry.</p></div>
+        <div class="card"><h3>Streaming &amp; tools</h3><p>Full SSE streaming and tool-use translation for OpenAI-style providers.</p></div>
+        <div class="card"><h3>Open source</h3><p>MIT licensed, ~250 lines of gateway. Audit it yourself.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Install</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Users</h3>
+          <p>1. Download <a href="https://github.com/shivamtiwari3/keyway/releases/latest/download/Keyway-Setup.zip">Keyway-Setup.zip</a> and unzip.<br>
+             2. Right-click <strong>Keyway.app → Open</strong> (once, to pass Gatekeeper).<br>
+             3. Enter provider, API key, model(s) → <strong>Install</strong>.<br>
+             4. Claude Desktop restarts on your models.</p>
+        </div>
+        <div class="card">
+          <h3>From source</h3>
+          <pre>git clone https://github.com/shivamtiwari3/keyway
+cd keyway
+make build
+open "dist/Keyway.app"</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <details><summary>Is my API key safe?</summary><p>Yes. Keyway binds to <code>127.0.0.1</code> only and stores your key at <code>~/Library/Application Support/Keyway/key</code> (mode 600). It is sent only to the endpoint you configure. No telemetry.</p></details>
+      <details><summary>Do I need Node, Xcode, or a terminal?</summary><p>No. The release app bundles its own runtime. Right-click → Open, paste your key, done.</p></details>
+      <details><summary>Which providers work?</summary><p>Anything OpenAI- or Anthropic-compatible — OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Together, or a local Ollama/llama.cpp/vLLM server.</p></details>
+      <details><summary>Why does it ask to restart Claude Desktop?</summary><p>Claude Desktop reads its provider profile only at startup, so Keyway writes it and restarts the app.</p></details>
+      <details><summary>How do I uninstall?</summary><p>Open Keyway again → <strong>Remove</strong>. It stops the gateway, removes the profile, and restores Claude Desktop.</p></details>
+      <details><summary>Is it free?</summary><p>Yes — MIT licensed. You only pay your model provider.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><strong>Keyway</strong> · MIT License · <a href="https://github.com/shivamtiwari3/keyway">github.com/shivamtiwari3/keyway</a></p>
+    <p>Not affiliated with Anthropic. “Claude” is a trademark of Anthropic.</p>
+  </div>
+</footer>
+</body>
+</html>
