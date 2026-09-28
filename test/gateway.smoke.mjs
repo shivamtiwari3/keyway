@@ -118,6 +118,11 @@ try {
     assert.equal(h.api, 'openai');
   });
 
+  await test('answers client connectivity checks (HEAD /api/hello)', async () => {
+    const r = await fetch(oa + '/api/hello', { method: 'HEAD' });
+    assert.equal(r.status, 200);
+  });
+
   await test('/v1/models lists advertised routes', async () => {
     const j = await (await fetch(oa + '/v1/models')).json();
     assert.deepEqual(j.data.map((m) => m.id), ['claude-sonnet-4-5']);

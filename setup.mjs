@@ -211,6 +211,7 @@ function win32() {
         return;
       }
       // Source checkout without Keyway.exe: run the gateway directly (no keep-alive).
+      if (!fs.existsSync(path.join(SUPPORT, 'node.exe'))) return; // not installed; caller reports the failure
       const logFd = fs.openSync(path.join(SUPPORT, 'gateway.log'), 'a');
       const child = spawn(path.join(SUPPORT, 'node.exe'), [path.join(SUPPORT, 'gateway.mjs')], {
         detached: true, stdio: ['ignore', logFd, logFd], windowsHide: true,
@@ -289,6 +290,17 @@ async function choosePort() {
     }
   }
   throw new Error('no free port in 8788-8807; set PORT to choose one');
+}
+
+// Claude Desktop pointed at a dead gateway just spins and retries, with no
+// error shown. Never restart it into Keyway mode unless the gateway answers.
+async function ensureGatewayBeforeRestart() {
+  const profileApplied = readJson(SETTINGS, {}).deploymentMode === '3p' && readJson(META, {}).appliedId === PROFILE_ID;
+  if (!profileApplied) return;
+  PORT = Number(readJson(path.join(SUPPORT, 'config.json'), {}).port || PORT);
+  if (await waitHealth(1000)) return;
+  await P.startGateway();
+  if (!(await waitHealth())) throw new Error('Keyway gateway is not running — not restarting Claude Desktop into Keyway mode. See gateway.log in ' + SUPPORT);
 }
 
 async function waitHealth(ms = 10000) {
@@ -388,6 +400,7 @@ try {
   } else if (cmd === 'status') {
     status();
   } else if (cmd === 'restart-claude') {
+    await ensureGatewayBeforeRestart();
     P.restartClaude();
     console.log('restarted');
   } else {

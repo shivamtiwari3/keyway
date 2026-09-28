@@ -235,6 +235,7 @@ namespace Keyway
             tray.ContextMenuStrip = menu;
             tray.Visible = true;
             tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) OpenSetup(); };
+            tray.BalloonTipClicked += delegate { supervisor.Restart(); Refresh(); };
 
             supervisor.Start();
             timer.Tick += delegate { Refresh(); };
@@ -248,6 +249,7 @@ namespace Keyway
         }
 
         bool polling;
+        int downPolls;
         void Refresh()
         {
             if (polling) return;
@@ -264,6 +266,12 @@ namespace Keyway
                         detailItem.Text = h.Detail;
                         detailItem.Visible = h.Connected && h.Detail.Length > 0;
                         tray.Icon = h.Connected ? onIcon : offIcon;
+                        // Claude Desktop just spins when the gateway is down, so say so loudly (once per outage).
+                        downPolls = h.Connected ? 0 : downPolls + 1;
+                        if (downPolls == 3)
+                            tray.ShowBalloonTip(15000, "Keyway gateway is not running",
+                                "Claude Desktop can't get replies. Click to restart the gateway, or open Setup → Remove to switch Claude back to normal.",
+                                ToolTipIcon.Warning);
                         string tip = h.Connected ? "Keyway — " + h.Provider : "Keyway — off";
                         tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
                     }));

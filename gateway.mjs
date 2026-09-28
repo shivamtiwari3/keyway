@@ -359,6 +359,8 @@ const server = http.createServer(async (req, res) => {
   log(req.method, p);
 
   if (p === '/health') return sendJson(res, 200, { ok: true, api: API, providerName: cfg.providerName || 'Provider', upstream: UPSTREAM, models: MODELS });
+  // Connectivity checks from Claude clients (e.g. `HEAD /api/hello`).
+  if ((req.method === 'HEAD' || req.method === 'GET') && (p === '/' || p === '/api/hello')) return sendJson(res, 200, { ok: true });
   if (p === '/v1/models' && req.method === 'GET') {
     return sendJson(res, 200, { object: 'list', data: MODELS.map((id) => ({ type: 'model', id, display_name: id, created_at: '1970-01-01T00:00:00Z' })) });
   }
