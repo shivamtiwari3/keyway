@@ -101,6 +101,7 @@ final class Model: ObservableObject {
 
 @MainActor
 final class Health: ObservableObject {
+    static let shared = Health()
     @Published var connected = false
     @Published var provider = "Provider"
     @Published var detail = ""
@@ -172,14 +173,43 @@ final class Health: ObservableObject {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var setupWindow: NSWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        // Launched by the login item (with --background): stay in the menu bar
+        // only. A normal double-click opens the setup window.
+        if !CommandLine.arguments.contains("--background") { showSetup() }
+    }
+
+    func showSetup() {
+        if setupWindow == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
+                             styleMask: [.titled, .closable, .miniaturizable],
+                             backing: .buffered, defer: false)
+            w.title = "Keyway Setup"
+            w.contentViewController = NSHostingController(rootView: ContentView())
+            w.isReleasedWhenClosed = false
+            w.center()
+            setupWindow = w
+        }
         NSApp.activate(ignoringOtherApps: true)
+        setupWindow?.makeKeyAndOrderFront(nil)
+    }
+}
+
+struct MenuBarLabel: View {
+    @ObservedObject var health = Health.shared
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: health.connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Text(health.connected ? "Connected" : "Off")
+        }
     }
 }
 
 struct MenuView: View {
-    @EnvironmentObject var health: Health
-    @Environment(\.openWindow) var openWindow
+    @ObservedObject var health = Health.shared
 
     var body: some View {
         Text(health.connected ? "● Connected — \(health.provider)" : "○ Not running")
@@ -195,8 +225,7 @@ struct MenuView: View {
         }
         Divider()
         Button("Open Setup…") {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
+            (NSApp.delegate as? AppDelegate)?.showSetup()
         }
         Button("Copy Diagnostics") {
             let text = "Keyway\nconnected=\(health.connected)\nlog=~/Library/Application Support/Keyway/gateway.log"
@@ -211,21 +240,12 @@ struct MenuView: View {
 @main
 struct KeywayApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var health = Health()
 
     var body: some Scene {
-        Window("Keyway", id: "main") {
-            ContentView().environmentObject(health)
-        }
-        .windowResizability(.contentSize)
-
         MenuBarExtra {
-            MenuView().environmentObject(health)
+            MenuView()
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: health.connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                Text(health.connected ? "Connected" : "Off")
-            }
+            MenuBarLabel()
         }
     }
 }

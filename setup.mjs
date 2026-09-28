@@ -95,7 +95,7 @@ function appPlist() {
 <dict>
   <key>Label</key><string>${APP_LABEL}</string>
   <key>ProgramArguments</key>
-  <array><string>${APP_EXE}</string></array>
+  <array><string>${APP_EXE}</string><string>--background</string></array>
   <key>RunAtLoad</key><true/>
   <key>LimitLoadToSessionType</key><string>Aqua</string>
   <key>ProcessType</key><string>Interactive</string>

@@ -5,8 +5,9 @@
 //   api: "anthropic" -> transparent pass-through to {upstream}/v1/messages
 //   api: "openai"    -> Anthropic Messages API <-> OpenAI Chat Completions
 //
-// Claude Desktop sends opaque `keyway/<hex>` ids (it rejects '/' and '.'),
-// which are hex-decoded back to the real provider model id.
+// Claude Desktop rejects gateway routes that don't reference an Anthropic model,
+// so it sends routes like `claude-sonnet-4-5`; modelMap resolves each to the real
+// provider model.
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,6 +21,8 @@ const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
 
 const HOST = cfg.host || '127.0.0.1';
 const PORT = cfg.port || 8788;
+// DNS-rebinding guard: only accept requests addressed to loopback.
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 let UPSTREAM = (cfg.upstream || '').replace(/\/+$/, '');
 let API = ['auto', 'anthropic', 'openai'].includes(cfg.api) ? cfg.api : 'auto';
 const MODELS = (cfg.models || []).map((m) => (typeof m === 'string' ? m : m.name)).filter(Boolean);
@@ -28,7 +31,6 @@ const MODEL_MAP = cfg.modelMap || {};
 const AUTH_HEADER = cfg.authHeader || 'Authorization';
 const AUTH_SCHEME = cfg.authScheme === undefined ? 'Bearer ' : cfg.authScheme;
 const LOG = cfg.log !== false;
-const SAFE_PREFIX = 'keyway/';
 const STREAM_USAGE = cfg.streamUsage !== false;
 const REQUEST_TIMEOUT_MS = Number(cfg.timeoutMs || 600000);
 const PROBE_TIMEOUT_MS = Number(cfg.probeTimeoutMs || 8000);
@@ -46,13 +48,9 @@ const KEY = loadKey();
 
 const log = (...a) => { if (LOG) console.error(new Date().toISOString(), '[gateway]', ...a); };
 
-function decodeSafeId(model) {
-  if (typeof model !== 'string' || !model.startsWith(SAFE_PREFIX)) return null;
-  try { return Buffer.from(model.slice(SAFE_PREFIX.length), 'hex').toString('utf8') || null; } catch { return null; }
-}
 function resolveModel(model) {
   if (!model) return DEFAULT_MODEL;
-  return MODEL_MAP[model] || decodeSafeId(model) || DEFAULT_MODEL;
+  return MODEL_MAP[model] || DEFAULT_MODEL;
 }
 
 function readBody(req) {
@@ -155,6 +153,7 @@ function openAIToAnthropic(resp, requestedModel) {
   const msg = choice.message || {};
   const content = [];
   if (typeof msg.content === 'string' && msg.content.length) content.push({ type: 'text', text: msg.content });
+  else if (Array.isArray(msg.content)) for (const p of msg.content) if (p && p.type === 'text' && p.text) content.push({ type: 'text', text: p.text });
   for (const tc of msg.tool_calls || []) {
     let input = {};
     try { input = tc.function && tc.function.arguments ? JSON.parse(tc.function.arguments) : {}; } catch { input = { _raw: tc.function && tc.function.arguments }; }
@@ -356,6 +355,9 @@ async function forwardOpenAI(req, res, body, requestedModel) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || HOST}`);
   const p = url.pathname;
+  if (!ALLOWED_HOSTS.has((req.headers.host || '').toLowerCase())) {
+    return sendJson(res, 403, { type: 'error', error: { type: 'permission_error', message: 'forbidden host' } });
+  }
   log(req.method, p);
 
   if (p === '/health') return sendJson(res, 200, { ok: true, api: API, providerName: cfg.providerName || 'Provider', upstream: UPSTREAM, models: MODELS });
