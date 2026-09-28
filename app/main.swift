@@ -104,12 +104,41 @@ final class Health: ObservableObject {
     @Published var connected = false
     @Published var provider = "Provider"
     @Published var detail = ""
+    @Published var updateAvailable: String?
     private var timer: Timer?
     init() {
         Task { await poll() }
+        Task { await checkUpdate() }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
             Task { @MainActor in await self.poll() }
         }
+    }
+
+    func checkUpdate() async {
+        guard let url = URL(string: "https://api.github.com/repos/shivamtiwari3/keyway/releases/latest") else { return }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 5
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = obj["tag_name"] as? String else { return }
+        let current = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
+        if Self.isNewer(Self.version(tag), Self.version(current)) { updateAvailable = tag }
+    }
+
+    static func version(_ s: String) -> [Int] {
+        s.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            .split(separator: ".").map { Int($0.prefix(while: { $0.isNumber })) ?? 0 }
+    }
+
+    static func isNewer(_ a: [Int], _ b: [Int]) -> Bool {
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0
+            let y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return false
     }
     private var healthURL: URL {
         let cfg = ("~/Library/Application Support/Keyway/config.json" as NSString).expandingTildeInPath
@@ -156,6 +185,13 @@ struct MenuView: View {
         Text(health.connected ? "● Connected — \(health.provider)" : "○ Not running")
         if health.connected && !health.detail.isEmpty {
             Text(health.detail).foregroundStyle(.secondary)
+        }
+        if let v = health.updateAvailable {
+            Button("Update available: \(v)") {
+                if let url = URL(string: "https://github.com/shivamtiwari3/keyway/releases/latest") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
         }
         Divider()
         Button("Open Setup…") {

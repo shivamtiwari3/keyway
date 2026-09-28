@@ -13,3 +13,6 @@ config.json
 # node (bundled at build time, not committed)
 node
 node_modules/
+
+# build cache
+.cache/

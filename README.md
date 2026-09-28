@@ -49,7 +49,7 @@ Claude Desktop ──▶  127.0.0.1:8788 (Keyway)  ──▶  your provider
 
 ## Requirements
 
-- macOS 13 or later (**Apple Silicon**) — the release app bundles an arm64 runtime
+- macOS 13 or later (Apple Silicon or Intel — the release app is universal)
 - Claude Desktop installed
 - A model provider endpoint + API key
 
@@ -83,8 +83,17 @@ Requires macOS with `swiftc` (Xcode Command Line Tools) and Node.
 ```sh
 git clone https://github.com/shivamtiwari3/keyway
 cd keyway
-make build            # -> dist/Keyway.app and dist/Keyway-Setup.zip
+make build            # -> dist/Keyway.app and dist/Keyway-Setup.zip (universal)
 open "dist/Keyway.app"
+```
+
+Builds are universal (arm64 + x86_64) and bundle a universal Node runtime.
+To sign and notarize for distribution, set:
+
+```sh
+CODESIGN_IDENTITY="Developer ID Application: You (TEAMID)" \
+APPLE_ID="you@example.com" TEAM_ID="TEAMID" APPLE_PASSWORD="app-specific-password" \
+./make-dist.sh
 ```
 
 Or drive the pieces directly:

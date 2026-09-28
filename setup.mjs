@@ -16,6 +16,9 @@ const META = path.join(LIB, '_meta.json');
 const SETTINGS = path.join(ROOT3P, 'claude_desktop_config.json');
 const LABEL = 'dev.keyway.gateway';
 const PLIST = path.join(HOME, 'Library/LaunchAgents', LABEL + '.plist');
+const APP_LABEL = 'dev.keyway.app';
+const APP_PLIST = path.join(HOME, 'Library/LaunchAgents', APP_LABEL + '.plist');
+const APP_EXE = path.resolve(RES, '..', 'MacOS', 'Keyway'); // present when run from Keyway.app
 const PROFILE_ID = '7a57ad9d-8708-5e0e-9a63-2d50f6438c90';
 const PORT = Number(process.env.PORT || 8788);
 const arg = (name, def = '') => { const i = process.argv.indexOf('--' + name); return i >= 0 ? (process.argv[i + 1] ?? '') : def; };
@@ -85,6 +88,37 @@ function plist() {
 `;
 }
 
+function appPlist() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${APP_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array><string>${APP_EXE}</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>
+`;
+}
+
+// Keep the menu bar icon present across logins. Only when run from the app bundle.
+function installLoginItem() {
+  if (!fs.existsSync(APP_EXE)) return false;
+  fs.mkdirSync(path.dirname(APP_PLIST), { recursive: true });
+  fs.writeFileSync(APP_PLIST, appPlist());
+  sh('/bin/launchctl', ['bootout', `gui/${UID}/${APP_LABEL}`]);
+  sh('/bin/launchctl', ['bootstrap', `gui/${UID}`, APP_PLIST]);
+  return true;
+}
+
+function removeLoginItem() {
+  sh('/bin/launchctl', ['bootout', `gui/${UID}/${APP_LABEL}`]);
+  rm(APP_PLIST);
+}
+
 function restartClaude() {
   sh('/usr/bin/killall', ['Claude']);
   const end = Date.now() + 4000;
@@ -105,7 +139,11 @@ function writeProfile() {
     inferenceModels: MODELS.map((m) => ({ name: m.name, labelOverride: m.label, anthropicFamilyTier: m.tier, isFamilyDefault: true })),
   });
   const meta = readJson(META, {});
-  meta.entries = (meta.entries || []).filter((e) => e && e.id !== PROFILE_ID);
+  // Drop our old entry and any dead references (profile file missing) so Claude
+  // Desktop doesn't warn about stale entries left by prior installs.
+  meta.entries = (meta.entries || [])
+    .filter((e) => e && e.id !== PROFILE_ID)
+    .filter((e) => fs.existsSync(path.join(LIB, e.id + '.json')));
   meta.entries.push({ id: PROFILE_ID, name: 'Keyway', provider: 'gateway' });
   meta.appliedId = PROFILE_ID;
   delete meta.hybridPointer;
@@ -142,12 +180,14 @@ async function install(key) {
   sh('/bin/launchctl', ['bootstrap', `gui/${UID}`, PLIST]);
   if (!(await waitHealth())) throw new Error('gateway did not start — see gateway.log in ' + SUPPORT);
   writeProfile();
+  if (installLoginItem()) console.log('menu bar app set to launch at login');
   restartClaude();
 }
 
 function uninstall() {
   sh('/bin/launchctl', ['bootout', `gui/${UID}/${LABEL}`]);
   rm(PLIST);
+  removeLoginItem();
   rm(path.join(LIB, PROFILE_ID + '.json'));
   const meta = readJson(META, null);
   if (meta) {
