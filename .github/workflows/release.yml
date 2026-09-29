@@ -20,3 +20,18 @@ jobs:
         with:
           files: dist/Keyway-Setup.zip
           generate_release_notes: true
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Keyway for Windows
+        shell: pwsh
+        run: ./make-dist.ps1 -Arch ${{ matrix.arch }}
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Keyway-Windows-${{ matrix.arch }}.zip

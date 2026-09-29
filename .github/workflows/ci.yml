@@ -14,9 +14,41 @@ jobs:
         run: |
           node --check gateway.mjs
           node --check setup.mjs
+      - name: Gateway smoke test
+        run: node test/gateway.smoke.mjs
       - name: Lint Info.plist
         run: plutil -lint app/Info.plist
       - name: Test gateway
         run: node --test test/gateway.test.mjs
       - name: Build app
         run: ./make-dist.sh
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check JS
+        run: |
+          node --check gateway.mjs
+          node --check setup.mjs
+      - name: Gateway smoke test
+        run: node test/gateway.smoke.mjs
+      - name: Build Keyway for Windows
+        shell: pwsh
+        run: ./make-dist.ps1 -Arch x64
+      - name: Sandboxed install / uninstall
+        shell: pwsh
+        run: |
+          $S = Join-Path $env:RUNNER_TEMP 'kw'
+          $env:KEYWAY_SUPPORT_DIR = "$S\support"; $env:KEYWAY_CLAUDE_3P_DIR = "$S\claude3p"; $env:PORT = '18788'
+          $R = 'dist\Keyway\resources'
+          & "$R\node.exe" "$R\setup.mjs" install --key sk-ci --provider-name CI --upstream http://127.0.0.1:9/v1 --models m1 --no-restart --no-autostart
+          if ($LASTEXITCODE -ne 0) { throw 'install failed' }
+          (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18788/health).Content
+          if ((Get-Content "$S\claude3p\claude_desktop_config.json" | ConvertFrom-Json).deploymentMode -ne '3p') { throw 'profile not applied' }
+          & "$R\node.exe" "$R\setup.mjs" uninstall --no-restart
+          if ($LASTEXITCODE -ne 0) { throw 'uninstall failed' }
+          if ((Get-Content "$S\claude3p\claude_desktop_config.json" | ConvertFrom-Json).deploymentMode -ne '1p') { throw 'profile not reverted' }

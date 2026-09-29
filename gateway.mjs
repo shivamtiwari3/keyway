@@ -237,6 +237,13 @@ function authHeaders() {
 let detectPromise = null;
 const modeResolved = () => API === 'anthropic' || API === 'openai';
 
+// fetch() only says "fetch failed"; the useful part (ENOTFOUND, ECONNREFUSED,
+// a TLS certificate error from HTTPS-scanning antivirus, ...) is in e.cause.
+function netError(e) {
+  const c = e && e.cause;
+  return c ? `${e.message} (${c.code || c.message || c})` : String(e && e.message || e);
+}
+
 async function fetchTimeout(url, opts, ms) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), ms);
@@ -299,12 +306,28 @@ async function forwardAnthropic(req, res, pathname, search, body) {
   try {
     upstream = streaming ? await fetch(UPSTREAM + pathname + search, opts)
                          : await fetchTimeout(UPSTREAM + pathname + search, opts, REQUEST_TIMEOUT_MS);
-  } catch (e) { return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Upstream request failed: ' + e.message } }); }
+  } catch (e) { log('upstream unreachable', netError(e)); return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Could not reach ' + UPSTREAM + ': ' + netError(e) } }); }
   const out = {};
   for (const [k, v] of upstream.headers) if (!['content-encoding', 'transfer-encoding', 'content-length', 'connection'].includes(k.toLowerCase())) out[k] = v;
   res.writeHead(upstream.status, out);
   if (upstream.body) for await (const chunk of upstream.body) res.write(chunk);
   res.end();
+}
+
+// Report provider errors in Anthropic shape, keeping the provider's own message.
+// A 404 is sent on as 400: Claude Desktop treats any gateway 404 as "model does
+// not exist" and hides the message, which is misleading when the provider is
+// complaining about something else (wrong URL, bad request, retired model).
+function sendUpstreamError(res, status, text) {
+  let detail = text;
+  try { const j = JSON.parse(text); detail = (j.error && (j.error.message || j.error)) || j.message || text; } catch {}
+  if (typeof detail !== 'string') detail = JSON.stringify(detail);
+  const type = status === 401 ? 'authentication_error' : status === 403 ? 'permission_error'
+    : status === 429 ? 'rate_limit_error' : status >= 500 ? 'api_error' : 'invalid_request_error';
+  // 413 likewise: Claude clients show "Request too large (max 32MB)" for any 413,
+  // but providers use it for token/rate limits (e.g. Groq's tokens-per-minute cap).
+  const out = status === 404 || status === 413 ? 400 : status;
+  return sendJson(res, out, { type: 'error', error: { type, message: `${cfg.providerName || 'Provider'} returned HTTP ${status}: ${String(detail).slice(0, 500)}` } });
 }
 
 async function forwardOpenAI(req, res, body, requestedModel) {
@@ -329,15 +352,15 @@ async function forwardOpenAI(req, res, body, requestedModel) {
         upstream = await call(openaiBody);
       } else {
         log('upstream 400', t.slice(0, 300));
-        return sendJson(res, 400, { type: 'error', error: { type: 'api_error', message: `Upstream 400: ${t.slice(0, 500)}` } });
+        return sendUpstreamError(res, 400, t);
       }
     }
-  } catch (e) { return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Upstream request failed: ' + e.message } }); }
+  } catch (e) { log('upstream unreachable', netError(e)); return sendJson(res, 502, { type: 'error', error: { type: 'api_error', message: 'Could not reach ' + UPSTREAM + ': ' + netError(e) } }); }
 
   if (!upstream.ok) {
     const text = await upstream.text().catch(() => '');
     log('upstream', upstream.status, text.slice(0, 300));
-    return sendJson(res, upstream.status, { type: 'error', error: { type: 'api_error', message: `Upstream ${upstream.status}: ${text.slice(0, 500)}` } });
+    return sendUpstreamError(res, upstream.status, text);
   }
   if (openaiBody.stream) {
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -361,6 +384,8 @@ const server = http.createServer(async (req, res) => {
   log(req.method, p);
 
   if (p === '/health') return sendJson(res, 200, { ok: true, api: API, providerName: cfg.providerName || 'Provider', upstream: UPSTREAM, models: MODELS });
+  // Connectivity checks from Claude clients (e.g. `HEAD /api/hello`).
+  if ((req.method === 'HEAD' || req.method === 'GET') && (p === '/' || p === '/api/hello')) return sendJson(res, 200, { ok: true });
   if (p === '/v1/models' && req.method === 'GET') {
     return sendJson(res, 200, { object: 'list', data: MODELS.map((id) => ({ type: 'model', id, display_name: id, created_at: '1970-01-01T00:00:00Z' })) });
   }
